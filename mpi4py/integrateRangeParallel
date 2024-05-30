@@ -1,0 +1,61 @@
+#example to run: mpiexec -n 4 python3 integrateRangeParallel float float int 
+
+import numpy 
+import sys 
+from mpi4py import MPI 
+from mpi4py.MPI import ANY_SOURCE #to call Recv without specifying source
+
+comm = MPI.COMM_WORLD 
+rank = comm.Get_rank()
+size = comm.Get_size()
+
+#Command line arguments 
+a = float(sys.argv[1])
+b = float(sys.argv[2])
+n = int(sys.argv[3])
+
+#Function to integrate 
+def f(x): 
+    return x*x
+
+#Function to parallelize by calculating partitions of interval on different processes
+def integrateRange(a, b, n): 
+    '''Integrate with trapezoid rule on interval from a to b with n trapezoids'''
+    integral = -(f(a) + f(b))/2.0 
+    for x in numpy.linspace(a, b, n+1): #returns linearly even spaced out pts
+        integral = integral + f(x)
+    integral = integral * (b-a)/n
+    return integral 
+
+#Step size, h 
+h = (b-a)/n
+
+#local n = num of trapezoids each process will compute 
+local_n = int(n/size) #int division casts to float in Python3
+
+#calculate start and end of interval handled by each process
+local_a = a + rank*local_n*h
+local_b = local_a + local_n*h
+
+#initialize numpy objects for passing msgs and storing what is recv'ed
+integral = numpy.zeros(1)
+recv_buffer = numpy.zeros(1)
+
+#local computation 
+integral[0] = integrateRange(local_a, local_b, local_n)
+
+#Parallelize 
+#Root node receives results from all processes and sums them
+if rank == 0 : 
+    total = integral[0]
+    for i in range(1, size): 
+        comm.Recv(recv_buffer, ANY_SOURCE) #P0 can receive the msg in any order
+        total += recv_buffer[0]
+else: 
+    #All other nodes send results to root node
+    comm.Send(integral, 0) #destination is 0 by default?
+
+#Root node prints results 
+if comm.rank == 0: 
+    print ("With n = ", n, "trapezoids, the estimate of the integral from \n", 
+    a, "to", b, "of x^2", "is", total)

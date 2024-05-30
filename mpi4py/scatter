@@ -1,0 +1,23 @@
+import numpy 
+from mpi4py import MPI 
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
+LENGTH = 3 
+
+#Create vector to be divided on root node
+if rank == 0: 
+    #Make it so that length of recvbuf evenly divides length of sendbuf
+    #Generates arbitrary vector that will work for us: 
+    x = numpy.linspace(1, size*LENGTH, size*LENGTH)
+else: 
+    #all processes must have a value for x 
+    x = None 
+#init as numpy array 
+x_local = numpy.zeros(LENGTH)
+
+#Scatter x across all processes 
+comm.Scatter(x, x_local, 0)
+
+print ("process", rank, "x:", x)
+print ("process", rank, "x_local:", x_local)
